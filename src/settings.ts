@@ -280,7 +280,8 @@ export interface SubagentsSettings {
 
   /**
    * Whether FleetView includes nested children in an indented tree.
-   * Defaults to false so the existing top-level-only roster stays compact.
+   * Defaults to true, so a delegated fleet reads as one hierarchy. Set false
+   * for the compact top-level-only roster.
    */
   nestedTreeView?: boolean;
   /**

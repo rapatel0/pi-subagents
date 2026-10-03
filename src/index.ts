@@ -1135,10 +1135,12 @@ export default function (pi: ExtensionAPI) {
   // Claude Code-style FleetView: navigable list of main + subagents below the editor.
   // The last arguments keep a conversation overlay opened here identical to one
   // opened from `/agents`, and optionally expose owned nested children as a tree.
-  let nestedTreeView = false;
+  let nestedTreeView = true;
   function isNestedTreeViewEnabled(): boolean { return nestedTreeView; }
   function setNestedTreeViewEnabled(b: boolean): void { nestedTreeView = b; fleet.update(); }
   const fleet = new FleetList(manager, agentActivity, isShowCostEnabled, getViewerMarkdown,
+    // SAFETY: chooseViewerMarkdown only reads the UI/notify members both shapes
+    // share, so the narrower view stays valid across the host's context rename.
     (mode) => chooseViewerMarkdown(mode, currentCtx as unknown as ExtensionCommandContext | undefined),
     isNestedTreeViewEnabled);
   let fleetViewEnabled = true;
@@ -1364,6 +1366,7 @@ export default function (pi: ExtensionAPI) {
   // Grab UI context from first tool execution + clear lingering widget on new turn
   pi.on("tool_execution_start", async (_event, ctx) => {
     widget.setUICtx(ctx.ui as UICtx);
+    // SAFETY: FleetUICtx is the subset of the host UI context this list calls.
     fleet.setUICtx(ctx.ui as unknown as FleetUICtx);
     widget.onTurnStart();
   });
@@ -3998,6 +4001,8 @@ Write the file using the write tool. Only write the file, nothing else.`;
     viewAgentConversation,
     // Read lazily: `currentCtx` is rebound on every session_start, and the
     // fleet list may act between sessions, when there is none.
+    // SAFETY: currentCtx is only ever assigned a full command context or undefined,
+    // so the cast just re-states what the assignments guarantee.
     getCtx: () => currentCtx as unknown as ExtensionCommandContext | undefined,
   };
 

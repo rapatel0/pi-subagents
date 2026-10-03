@@ -206,14 +206,35 @@ describe("FleetList navigation", () => {
     expect(h.render()).toEqual([]);
   });
 
-  it("hides nested child records from the coordinator fleet", () => {
+  it("hides nested child records when Nested tree is off", () => {
     const h = harness([
       makeRecord({ id: "top", description: "top-level" }),
       makeRecord({ id: "nested", description: "nested-child", parentAgentId: "top" }),
-    ]);
+    ], { nestedTreeView: false });
     const output = h.render().join("\n");
     expect(output).toContain("top-level");
     expect(output).not.toContain("nested-child");
+  });
+
+  it("renders nested children when no settings getter is supplied", () => {
+    const agents = [
+      makeRecord({ id: "top", description: "top-level" }),
+      makeRecord({ id: "nested", description: "nested-child", parentAgentId: "top" }),
+    ];
+    const fleet = new FleetList(fakeManager(agents), new Map());
+    let factory: any;
+    fleet.setUICtx({
+      setWidget: (_k: string, c: any) => { factory = c; },
+      onTerminalInput: () => () => {},
+      getEditorText: () => "",
+      notify: () => {},
+      custom: (() => new Promise(() => {})) as any,
+    } as any);
+    fleet.update();
+    const tui = { requestRender: () => {}, terminal: { columns: 120, rows: 40 } };
+    const out = factory(tui, { fg: (_c: string, s: string) => s, bold: (s: string) => s }).render(120).join("\n");
+    expect(out).toContain("top-level");
+    expect(out).toContain("nested-child");
   });
 
   it("renders nested children as an indented tree when enabled", () => {

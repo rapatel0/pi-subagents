@@ -145,7 +145,7 @@ export class FleetList {
      */
     private onViewerMarkdown?: (mode: ViewerMarkdownMode) => void,
     /** Read live so the settings toggle changes the roster without a restart. */
-    private showNestedTree: () => boolean = () => false,
+    private showNestedTree: () => boolean = () => true,
   ) {}
 
   // ---- Lifecycle ----

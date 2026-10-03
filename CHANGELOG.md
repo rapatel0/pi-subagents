@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **FleetView shows nested children under their parent** (`nestedTreeView`, default `true`). The roster listed top-level agents only, so a fleet that delegated deeply read as a flat list with no hint of which agent owned which child. Nested rows now indent under their parent with `└─`, keep the same selection and conversation-viewer controls, and stay in launch order. Workflow-owned agents still report through their workflow row. Set `false` at `/agents → Settings → Nested tree` for the compact top-level-only roster.
+
 ### Fixed
 - **The workflow stand-down now recognises a lowercase `workflow` tool** ([#283](https://github.com/tintinweb/pi-subagents/issues/283) — thanks [@zampierilucas](https://github.com/zampierilucas)). The match is exact on purpose, and the set held `Workflow` and `SubagentWorkflow` only, so `@quintinshaw/pi-dynamic-workflows` — which registers lowercase `workflow` — never tripped it: with `workflowsEnabled` unset, both orchestrators reached the model and nothing warned. Adding the third name is the whole fix; exactness is kept, so a `list_workflows` still cannot take the feature down.
 
