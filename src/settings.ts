@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { NO_FALLBACK } from "./agent-types.js";
 import type { AgentMentionMode, JoinMode, ViewerMarkdownMode, WidgetMode } from "./types.js";
+import { OVERLAY_PCT_CEILING, OVERLAY_PCT_FLOOR } from "./ui/overlay-size.js";
 
 export interface SubagentsSettings {
   maxConcurrent?: number;
@@ -285,6 +286,20 @@ export interface SubagentsSettings {
    */
   nestedTreeView?: boolean;
   /**
+   * Overlay width as a percent of the terminal width. Defaults to 85.
+   *
+   * Read when an overlay opens, so a change lands on the next one rather than
+   * the frame already on screen.
+   */
+  overlayWidthPct?: number;
+  /**
+   * Overlay height as a percent of the terminal height. Defaults to 85.
+   *
+   * The conversation viewer budgets its transcript against the same number, so
+   * the line count and the frame's ceiling cannot disagree and clip the footer.
+   */
+  overlayHeightPct?: number;
+  /**
    * Whether the widget's running rows name the model driving each agent and the
    * thinking level it is running at.
    *
@@ -339,6 +354,8 @@ export interface SettingsAppliers {
   setShowModel: (b: boolean) => void;
   setViewerMarkdown: (mode: ViewerMarkdownMode) => void;
   setNestedTreeView?: (b: boolean) => void;
+  setOverlayWidthPct?: (n: number) => void;
+  setOverlayHeightPct?: (n: number) => void;
 }
 
 /** Emit callback — a subset of `pi.events.emit` to keep helpers testable. */
@@ -357,6 +374,10 @@ const MAX_CONCURRENT_CEILING = 1024;
 const MAX_TURNS_CEILING = 10_000;
 const GRACE_TURNS_CEILING = 1_000;
 const SUBAGENT_DEPTH_CEILING = 16;
+// Overlay sizing — the same bounds the UI applies, so a hand-edited value and a
+// typed one are held to the same range.
+const OVERLAY_PCT_MIN = OVERLAY_PCT_FLOOR;
+const OVERLAY_PCT_MAX = OVERLAY_PCT_CEILING;
 
 /** Drop fields that don't match the expected shape. Silent — garbage becomes absent. */
 function sanitize(raw: unknown): SubagentsSettings {
@@ -458,6 +479,20 @@ function sanitize(raw: unknown): SubagentsSettings {
   if (typeof r.nestedTreeView === "boolean") {
     out.nestedTreeView = r.nestedTreeView;
   }
+  if (
+    Number.isInteger(r.overlayWidthPct) &&
+    (r.overlayWidthPct as number) >= OVERLAY_PCT_MIN &&
+    (r.overlayWidthPct as number) <= OVERLAY_PCT_MAX
+  ) {
+    out.overlayWidthPct = r.overlayWidthPct as number;
+  }
+  if (
+    Number.isInteger(r.overlayHeightPct) &&
+    (r.overlayHeightPct as number) >= OVERLAY_PCT_MIN &&
+    (r.overlayHeightPct as number) <= OVERLAY_PCT_MAX
+  ) {
+    out.overlayHeightPct = r.overlayHeightPct as number;
+  }
   if (typeof r.workflowsEnabled === "boolean") {
     out.workflowsEnabled = r.workflowsEnabled;
   }
@@ -547,6 +582,8 @@ export function applySettings(s: SubagentsSettings, appliers: SettingsAppliers):
   if (typeof s.showModel === "boolean") appliers.setShowModel(s.showModel);
   if (s.viewerMarkdown) appliers.setViewerMarkdown(s.viewerMarkdown);
   if (typeof s.nestedTreeView === "boolean") appliers.setNestedTreeView?.(s.nestedTreeView);
+  if (typeof s.overlayWidthPct === "number") appliers.setOverlayWidthPct?.(s.overlayWidthPct);
+  if (typeof s.overlayHeightPct === "number") appliers.setOverlayHeightPct?.(s.overlayHeightPct);
   if (typeof s.workflowsEnabled === "boolean") appliers.setWorkflowsEnabled(s.workflowsEnabled);
 }
 

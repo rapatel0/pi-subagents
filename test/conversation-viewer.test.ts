@@ -45,6 +45,7 @@ vi.mock("@earendil-works/pi-tui", async (importOriginal) => {
 // dynamic import of the test subject must happen after)
 const { visibleWidth } = await import("@earendil-works/pi-tui");
 const { ConversationViewer, RESULT_MAX_CHARS } = await import("../src/ui/conversation-viewer.js");
+const { overlayRows, setOverlayHeightPct } = await import("../src/ui/overlay-size.js");
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -908,5 +909,54 @@ describe("ConversationViewer", () => {
         assertAllLinesFit(viewer.render(w), w);
       }
     });
+  });
+});
+
+describe("ConversationViewer height budget", () => {
+  const W = 80;
+
+  /** Long enough to saturate the budget at every terminal height here. */
+  function transcript(): any[] {
+    return Array.from({ length: 40 }, (_unused, i) => ({
+      role: "assistant",
+      content: [{ type: "text", text: `line ${i} ${"word ".repeat(12)}` }],
+    }));
+  }
+
+  function rendered(rows: number): string[] {
+    const viewer = new ConversationViewer(
+      mockTui(rows, W), mockSession(transcript()), mockRecord(), undefined, ansiTheme(), vi.fn(),
+    );
+    return viewer.render(W);
+  }
+
+  // The overlay's `maxHeight` and this budget are the same percentage of the
+  // terminal, so a frame that fills its budget must still fit inside the overlay.
+  it("fits the rendered frame to the height percentage", () => {
+    for (const rows of [12, 24, 40]) {
+      expect(rendered(rows).length).toBeLessThanOrEqual(overlayRows(rows));
+    }
+  });
+
+  it("uses the extra rows a taller terminal offers", () => {
+    expect(rendered(40).length).toBeGreaterThan(rendered(12).length);
+  });
+
+  // The frame's `maxHeight` is resolved once when the overlay opens, so the
+  // budget is captured the same way: a setting changed while the overlay is on
+  // screen must not leave a visible frame taller than what it renders into.
+  it("keeps the height it opened with when the setting changes afterwards", () => {
+    setOverlayHeightPct(85);
+    const viewer = new ConversationViewer(
+      mockTui(40, W), mockSession(transcript()), mockRecord(), undefined, ansiTheme(), vi.fn(),
+    );
+    const openedLength = viewer.render(W).length;
+    expect(openedLength).toBe(overlayRows(40));
+    setOverlayHeightPct(50);
+    try {
+      expect(viewer.render(W).length).toBe(openedLength);
+    } finally {
+      setOverlayHeightPct(85);
+    }
   });
 });

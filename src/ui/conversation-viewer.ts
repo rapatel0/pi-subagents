@@ -13,13 +13,12 @@ import type { AgentRecord, ViewerMarkdownMode } from "../types.js";
 import { getLifetimeCost, getLifetimeTotal, getSessionContextPercent } from "../usage.js";
 import type { Theme } from "./agent-widget.js";
 import { type AgentActivity, buildInvocationTags, describeActivity, fgPreservingNestedStyles, formatCost, formatDuration, formatSessionTokens, getPromptModeLabel } from "./agent-widget.js";
+import { getOverlayHeightPct, overlayRows } from "./overlay-size.js";
 import { createViewerKeys, type ViewerKeybindings, type ViewerKeys } from "./viewer-keys.js";
 
 /** Base lines consumed by chrome: top border + header + header sep + footer sep + footer + bottom border. */
 const CHROME_LINES_BASE = 6;
 const MIN_VIEWPORT = 3;
-/** Height ceiling shared by the overlay's `maxHeight` and the viewer's internal viewport cap. */
-export const VIEWPORT_HEIGHT_PCT = 70;
 
 /**
  * Cap on a single tool result or bash output before the viewer elides the rest.
@@ -160,6 +159,9 @@ export class ConversationViewer implements Component {
    */
   private readonly markdownCache = new WeakMap<object, { md: Markdown; text: string; failed?: boolean }>();
 
+  /** Height share captured when this overlay opened, matching its frame. */
+  private readonly heightPct: number;
+
   constructor(
     private tui: TUI,
     private session: AgentSession,
@@ -192,6 +194,10 @@ export class ConversationViewer implements Component {
     private onMarkdownMode?: (mode: ViewerMarkdownMode) => void,
   ) {
     this.markdownTheme = resolveMarkdownTheme(theme);
+    // Captured, not read per render: the frame's `maxHeight` was resolved when
+    // this overlay opened, and a budget that drifted from it would clip the
+    // footer on a setting changed from another menu while this was on screen.
+    this.heightPct = getOverlayHeightPct();
     this.keys = createViewerKeys(keybindings);
     this.unsubscribe = session.subscribe(() => {
       if (this.closed) return;
@@ -486,7 +492,7 @@ export class ConversationViewer implements Component {
   private viewportHeight(): number {
     // Cap mirrors the overlay's maxHeight — otherwise the viewer would render
     // more lines than the overlay shows and clip the footer.
-    const maxRows = Math.floor((this.tui.terminal.rows * VIEWPORT_HEIGHT_PCT) / 100);
+    const maxRows = overlayRows(this.tui.terminal.rows, this.heightPct);
     return Math.max(MIN_VIEWPORT, maxRows - this.chromeLines());
   }
 

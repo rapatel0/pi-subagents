@@ -17,7 +17,8 @@ import { type AgentManager, isTopLevelAgent } from "../agent-manager.js";
 import type { AgentRecord, ViewerMarkdownMode } from "../types.js";
 import { getLifetimeCost, getLifetimeTotal } from "../usage.js";
 import { type AgentActivity, formatCost, type Theme } from "./agent-widget.js";
-import { ConversationViewer, VIEWPORT_HEIGHT_PCT } from "./conversation-viewer.js";
+import { ConversationViewer } from "./conversation-viewer.js";
+import { overlayFrame } from "./overlay-size.js";
 
 /** Widget key for the below-editor fleet list. */
 const FLEET_KEY = "fleet";
@@ -472,7 +473,7 @@ export class FleetList {
       },
       {
         overlay: true,
-        overlayOptions: { anchor: "center", width: "90%", maxHeight: `${VIEWPORT_HEIGHT_PCT}%` },
+        overlayOptions: overlayFrame(),
       },
     ).then(() => this.clearViewer(), () => this.clearViewer());
   }

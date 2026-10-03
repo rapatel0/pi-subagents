@@ -11,6 +11,13 @@ import {
   formatFleetElapsed,
   formatFleetTokens,
 } from "../src/ui/fleet-list.js";
+import { setOverlayHeightPct, setOverlayWidthPct } from "../src/ui/overlay-size.js";
+
+/** What `ui.custom` receives beside the component factory. */
+type OverlayCallOptions = {
+  overlay?: boolean;
+  overlayOptions?: { anchor?: string; width?: string; maxHeight?: string };
+};
 
 // ---- Key sequences (see node_modules/@earendil-works/pi-tui/dist/keys.js) ----
 const DOWN = "\x1b[B";
@@ -85,6 +92,8 @@ interface Harness {
   closeWorkflowDialog: () => Promise<void>;
   /** The overlay component (a real ConversationViewer) once one is opened. */
   overlayComponent: () => { handleInput(data: string): void } | undefined;
+  /** Options the list handed `ui.custom` for the overlay it last opened. */
+  overlayOptions: () => OverlayCallOptions | undefined;
   /** Feed a key to the registered input handler; returns the consume result. */
   press: (data: string) => { consume?: boolean } | undefined;
   /** Render the currently-registered below-editor widget at the given width. */
@@ -128,6 +137,7 @@ function harness(
   let closed = false;
   let overlayDone: ((r: undefined) => void) | undefined;
   let overlayComponent: { handleInput(data: string): void } | undefined;
+  let lastOverlayOptions: OverlayCallOptions | undefined;
   const fakeTui = { requestRender: () => {}, terminal: { columns: 120, rows: 40 } };
 
   const ui: FleetUICtx = {
@@ -135,8 +145,9 @@ function harness(
     onTerminalInput: (h) => { inputHandler = h; return () => { inputHandler = undefined; }; },
     getEditorText: () => editorText,
     notify: () => {},
-    custom: ((factory: any) => {
+    custom: ((factory: any, options?: OverlayCallOptions) => {
       opened = true;
+      lastOverlayOptions = options;
       return new Promise<undefined>((resolve) => {
         const done = (r: undefined) => { closed = true; overlayDone = undefined; resolve(r); };
         overlayDone = done;
@@ -170,6 +181,7 @@ function harness(
     ui,
     manager,
     overlayComponent: () => overlayComponent,
+    overlayOptions: () => lastOverlayOptions,
     press: (data) => inputHandler?.(data),
     render: (width = 120) => (widgetFactory ? widgetFactory(fakeTui, theme).render(width) : []),
     setEditorText: (t) => { editorText = t; },
@@ -235,6 +247,25 @@ describe("FleetList navigation", () => {
     const out = factory(tui, { fg: (_c: string, s: string) => s, bold: (s: string) => s }).render(120).join("\n");
     expect(out).toContain("top-level");
     expect(out).toContain("nested-child");
+  });
+
+  it("hands the overlay the configured frame size", () => {
+    setOverlayWidthPct(70);
+    setOverlayHeightPct(60);
+    try {
+      const h = harness([makeRecord({ id: "top", description: "top-level" })]);
+      h.press(DOWN);   // activate the list
+      h.press(DOWN);   // → top-level row
+      h.press(ENTER);  // open its conversation overlay
+      expect(h.overlayOpened()).toBe(true);
+      expect(h.overlayOptions()).toEqual({
+        overlay: true,
+        overlayOptions: { anchor: "center", width: "70%", maxHeight: "60%" },
+      });
+    } finally {
+      setOverlayWidthPct(85);
+      setOverlayHeightPct(85);
+    }
   });
 
   it("renders nested children as an indented tree when enabled", () => {
@@ -578,7 +609,6 @@ describe("FleetList overlay lifecycle", () => {
 
     expect(h.manager.steer).toHaveBeenCalledWith("live", "go left");
   });
-
   it("opens a nested tree row in the existing conversation viewer", () => {
     const h = harness([
       makeRecord({ id: "top", description: "top-level" }),

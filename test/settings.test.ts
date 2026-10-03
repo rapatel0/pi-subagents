@@ -171,6 +171,19 @@ describe("settings persistence", () => {
     expect(loadSettings(projectDir)).toEqual({});
   });
 
+  it("round-trips overlay sizing and drops out-of-range or fractional values", () => {
+    saveSettings({ overlayWidthPct: 92, overlayHeightPct: 75 }, projectDir);
+    expect(loadSettings(projectDir)).toEqual({ overlayWidthPct: 92, overlayHeightPct: 75 });
+    // The bounds are the ones the UI enforces, so a hand-edited file and a
+    // typed menu entry are held to the same range.
+    writeProject({ overlayWidthPct: 10, overlayHeightPct: 101 } as any);
+    expect(loadSettings(projectDir)).toEqual({});
+    writeProject({ overlayHeightPct: 82.5 } as any);
+    expect(loadSettings(projectDir)).toEqual({});
+    writeProject({ overlayWidthPct: "85%" } as any);
+    expect(loadSettings(projectDir)).toEqual({});
+  });
+
   it("round-trips outputTranscript; drops non-boolean", () => {
     saveSettings({ outputTranscript: false }, projectDir);
     expect(loadSettings(projectDir)).toEqual({ outputTranscript: false });
@@ -690,6 +703,20 @@ describe("settings persistence", () => {
       expect(setNestedTreeView).toHaveBeenNthCalledWith(1, true);
       expect(setNestedTreeView).toHaveBeenNthCalledWith(2, false);
       expect(setNestedTreeView).toHaveBeenCalledTimes(2);
+    });
+
+    it("applies overlay sizing when the UI supplies its live setters", () => {
+      const setOverlayWidthPct = vi.fn();
+      const setOverlayHeightPct = vi.fn();
+      appliers.setOverlayWidthPct = setOverlayWidthPct;
+      appliers.setOverlayHeightPct = setOverlayHeightPct;
+      applySettings({ overlayWidthPct: 90, overlayHeightPct: 60 }, appliers);
+      expect(setOverlayWidthPct).toHaveBeenCalledWith(90);
+      expect(setOverlayHeightPct).toHaveBeenCalledWith(60);
+      // Absence must not overwrite the shipped default with nothing.
+      applySettings({}, appliers);
+      expect(setOverlayWidthPct).toHaveBeenCalledTimes(1);
+      expect(setOverlayHeightPct).toHaveBeenCalledTimes(1);
     });
 
     it("applies fleetView (true and false); skips it when absent", () => {

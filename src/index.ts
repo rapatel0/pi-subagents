@@ -57,6 +57,7 @@ import {
   type UICtx,
 } from "./ui/agent-widget.js";
 import { FleetList, type FleetUICtx, type FleetWorkflow } from "./ui/fleet-list.js";
+import { getOverlayHeightPct, getOverlayWidthPct, overlayFrame, setOverlayHeightPct, setOverlayWidthPct } from "./ui/overlay-size.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { selectItem } from "./ui/select-item.js";
 import { renderWorkflowCard, renderWorkflowEntryCard } from "./ui/workflow-card.js";
@@ -1434,6 +1435,8 @@ export default function (pi: ExtensionAPI) {
       setShowModel,
       setViewerMarkdown,
       setNestedTreeView: setNestedTreeViewEnabled,
+      setOverlayWidthPct,
+      setOverlayHeightPct,
     },
     (event, payload) => pi.events.emit(event, payload),
   );
@@ -3070,7 +3073,7 @@ Terse command-style prompts produce shallow, generic work.
       return;
     }
 
-    const { ConversationViewer, VIEWPORT_HEIGHT_PCT } = await import("./ui/conversation-viewer.js");
+    const { ConversationViewer } = await import("./ui/conversation-viewer.js");
     const session = record.session;
     const activity = agentActivity.get(record.id);
 
@@ -3084,7 +3087,7 @@ Terse command-style prompts produce shallow, generic work.
       },
       {
         overlay: true,
-        overlayOptions: { anchor: "center", width: "90%", maxHeight: `${VIEWPORT_HEIGHT_PCT}%` },
+        overlayOptions: overlayFrame(),
       },
     );
   }
@@ -3484,6 +3487,8 @@ Write the file using the write tool. Only write the file, nothing else.`;
       showModel: isShowModelEnabled(),
       viewerMarkdown: getViewerMarkdown(),
       nestedTreeView: isNestedTreeViewEnabled(),
+      overlayWidthPct: getOverlayWidthPct(),
+      overlayHeightPct: getOverlayHeightPct(),
     } satisfies SubagentsSettings;
   }
 
@@ -3500,6 +3505,7 @@ Write the file using the write tool. Only write the file, nothing else.`;
 
   const NUMERIC_IDS = new Set([
     "maxConcurrent", "maxConcurrentForeground", "defaultMaxTurns", "graceTurns", "maxSubagentDepth",
+    "overlayWidthPct", "overlayHeightPct",
   ]);
 
   async function showSettings(ctx: ExtensionCommandContext) {
@@ -3509,6 +3515,8 @@ Write the file using the write tool. Only write the file, nothing else.`;
       const dmt = getDefaultMaxTurns() ?? 0;
       const gt = getGraceTurns();
       const msd = getMaxSubagentDepth();
+      const owp = getOverlayWidthPct();
+      const ohp = getOverlayHeightPct();
       // Label what unset actually does — it targets general-purpose even when
       // that is unregistered (the permissive hardcoded tier), so showing "none"
       // there would advertise strict dispatch for the most permissive state.
@@ -3671,6 +3679,20 @@ Write the file using the write tool. Only write the file, nothing else.`;
           description: "Show nested children in FleetView with indentation and openable rows",
           currentValue: isNestedTreeViewEnabled() ? "on" : "off",
           values: ["on", "off"],
+        },
+        {
+          id: "overlayWidthPct",
+          label: "Overlay width",
+          description: "Overlay width as a percent of the terminal (20-100, Enter to type)",
+          currentValue: String(owp),
+          values: [String(owp)],
+        },
+        {
+          id: "overlayHeightPct",
+          label: "Overlay height",
+          description: "Overlay height as a percent of the terminal (20-100, Enter to type)",
+          currentValue: String(ohp),
+          values: [String(ohp)],
         },
         {
           id: "agentMentions",
@@ -3847,6 +3869,20 @@ Write the file using the write tool. Only write the file, nothing else.`;
         const enabled = value === "on";
         setNestedTreeViewEnabled(enabled);
         notifyApplied(ctx, `Nested tree ${enabled ? "enabled" : "disabled"}`);
+      } else if (id === "overlayWidthPct") {
+        const n = parseInt(value, 10);
+        if (Number.isFinite(n)) {
+          setOverlayWidthPct(n);
+          // Report what the setter kept — a value outside the range is clamped,
+          // and the toast is where the user learns the real number.
+          notifyApplied(ctx, `Overlay width set to ${getOverlayWidthPct()}%`);
+        }
+      } else if (id === "overlayHeightPct") {
+        const n = parseInt(value, 10);
+        if (Number.isFinite(n)) {
+          setOverlayHeightPct(n);
+          notifyApplied(ctx, `Overlay height set to ${getOverlayHeightPct()}%`);
+        }
       } else if (id === "agentMentions") {
         const mode = value as AgentMentionMode;
         setAgentMentionMode(mode);
@@ -3920,9 +3956,13 @@ Write the file using the write tool. Only write the file, nothing else.`;
           ? String(manager.getMaxConcurrentForeground())
           : result === "defaultMaxTurns"
             ? String(getDefaultMaxTurns() ?? 0)
-            : result === "maxSubagentDepth"
-              ? String(getMaxSubagentDepth())
-              : String(getGraceTurns());
+          : result === "maxSubagentDepth"
+            ? String(getMaxSubagentDepth())
+            : result === "overlayWidthPct"
+              ? String(getOverlayWidthPct())
+              : result === "overlayHeightPct"
+                ? String(getOverlayHeightPct())
+                : String(getGraceTurns());
 
       const label = result === "maxConcurrent"
         ? "Max concurrency (1+)"
@@ -3930,9 +3970,13 @@ Write the file using the write tool. Only write the file, nothing else.`;
           ? "Max foreground concurrency (0 = unlimited)"
           : result === "defaultMaxTurns"
             ? "Default max turns (0 = unlimited)"
-            : result === "maxSubagentDepth"
-              ? "Nested depth (0/1 = nesting off)"
-              : "Grace turns (1+)";
+          : result === "maxSubagentDepth"
+            ? "Nested depth (0/1 = nesting off)"
+            : result === "overlayWidthPct"
+              ? "Overlay width (20-100%)"
+              : result === "overlayHeightPct"
+                ? "Overlay height (20-100%)"
+                : "Grace turns (1+)";
 
       // Loop until user enters a valid integer or cancels (Esc / null).
       // Silently trims whitespace; rejects non-numeric input by re-prompting.
